@@ -12,15 +12,20 @@ import pickle
 from pygame import mixer
 import openpyxl
 import collections
+import configparser
+
+config = configparser.SafeConfigParser()
+config.read('support_files/config.ini')
 LARGE_FONT= ("Helvetica", 18)
 SMALL_FONT= ("Helvetica", 14)
 SMALL_FONT_ul= ("Helvetica", 12, "underline", "bold")
-theme_color= "cornsilk"
-theme_color2= "#dcd1a5"
-theme_color3= "#baac72"
-path_audio = 'C:/Users/ericm/OneDrive/Game_media/audio/'
-path_images = 'C:/Users/ericm/OneDrive/Game_media/images/'
-path_saves = 'C:/Users/ericm/source/repos/BirdSongGame/BirdSongGame/saves/'
+theme_color= (config.get('default', 'theme_color'))
+theme_color2= (config.get('default', 'theme_color2'))
+theme_color3= (config.get('default', 'theme_color3'))
+path_audio = (config.get('default', 'path_audio'))
+path_images = (config.get('default', 'path_images'))
+path_saves = (config.get('default', 'path_saves'))
+dBase = (config.get('default', 'dBase'))
 default_image = path_images+"Default.jpg"
 bkgd_img = path_images+"bg.gif"
 positions = []
@@ -28,13 +33,13 @@ recent_misses = []      #only needed in case of missing pickle file
 
 
 class storage_interface(object):
-    passeriformes = []      #create empty list 1
+    passeriformes = []      #create empty list
     non_passeriforms = []   #create empty list
     waterbirds = []         #create empty list
     animal_list = []        #create empty list
 
     def __init__(self):
-        self.wb = openpyxl.load_workbook('C:/Users/ericm/source/repos/BirdSongGame/BirdSongGame/BirdList2.xlsx')  #open spreadsheet
+        self.wb = openpyxl.load_workbook(dBase)  #open spreadsheet
         self.ws = self.wb['Sheet1']       #define worksheet
         self.ws2 = self.wb['Sheet2']      #define worksheet
         self.ws3 = self.wb['Sheet3']      #define worksheet
@@ -97,13 +102,13 @@ def replay_song(event=None):
     mixer.music.play(0)
 
 def save_misses_file():                                 #saves 100 misses to file 
-    with open('recent_misses.pickle', 'wb') as fp:      #save selections to file
+    with open('support_files/recent_misses.pickle', 'wb') as fp:      #save selections to file
         pickle.dump(recent_misses, fp)
     
 
 def load_misses_file():                                 #loads 100 misses from file
     try:
-        with open ('recent_misses.pickle', 'rb') as fp:     #load file with miss history
+        with open ('support_files/recent_misses.pickle', 'rb') as fp:     #load file with miss history
             misses = pickle.load(fp)
             #recent_misses.append(misses)
             return misses
@@ -190,7 +195,8 @@ class BirdSong(tk.Tk):
 
 class StartPage(ttk.Frame):
     def menubar(self, root):        ##menubar
-        pass
+        menubar = tk.Menu(root)
+        return menubar 
     def __init__(self, parent, controller):
         self.controller = controller
         ttk.Frame.__init__(self,parent)
@@ -256,7 +262,8 @@ class GamePage(ttk.Frame):
     my_list2 = ()
     bird_name ='NorthernCardinal'
     def menubar(self, root):        ##menubar
-        pass
+        menubar = tk.Menu(root)
+        return menubar 
 
     def __init__(self, parent, controller):
         self.controller = controller
@@ -635,7 +642,7 @@ class ConfigPage(ttk.Frame):
         self.labelframe2.lift()
         self.active_selections.grid(row=10, column=0, columnspan=3, sticky='W')
 
-        ConfigPage.populate_listbox(self, 'default.pickle')
+        ConfigPage.populate_listbox(self, 'support_files/default.pickle')
         ConfigPage.activate_game_list(self)
 
     def st_page(self):
@@ -660,8 +667,13 @@ class ConfigPage(ttk.Frame):
                 #print(sticky_defaults)
                 self.var.set(sticky_defaults[0])
                 self.var2.set(sticky_defaults[1])
-        except:
-            tk.messagebox.showerror(title="Show Error", message = "Oops! Default file missing. Creating new one. Go to configuration to select defaults.")    
+        except FileNotFoundError:
+            tk.messagebox.showerror(title="Show Error", message = "Oops! Default file missing. Creating new one. Go to configuration page to create/activate a playlist.")
+            print("File Does Not Exist")
+        except Exception as e:
+            tk.messagebox.showerror(title="Show Error", message = "Oops! Invalid file. Choose a valid file type.")
+            print (e)
+            return
         bob = ConfigPage.find_posns_in_listbox(quiz_test_list, storage_interface.passeriformes)    
         self.listbox1.selection_clear(0, 'end')
         for item in bob:  #set selected items in list from file
@@ -704,17 +716,21 @@ class ConfigPage(ttk.Frame):
         #print(selection3)
         #print(selection4)
         self.active_selections.configure(text = "Active selections:"+ str(len(self.game_list)))
-        with open('default.pickle', 'wb') as fp:  #save selections to default file
+        with open('support_files/default.pickle', 'wb') as fp:  #save selections to default file
             pickle.dump(self.game_list, fp)
             pickle.dump(self.game_defaults, fp)
 
     def load_file(self):
-        answer = tk.filedialog.askopenfilename(initialdir = path_saves, filetypes=[('text files', 'txt')])
+        answer = tk.filedialog.askopenfilename(initialdir = path_saves, filetypes=[('text files', 'bird')])
+        if answer == (""):
+            answer = ('support_files/default.pickle')
         ConfigPage.populate_listbox(self, answer)
+        ConfigPage.activate_game_list(self)
+        
 
     def save_file(self, controller):
         ConfigPage.activate_game_list(self)
-        answer = tk.filedialog.asksaveasfilename(initialdir = path_saves ,defaultextension = '.txt', filetypes=[('text files', 'txt')])
+        answer = tk.filedialog.asksaveasfilename(initialdir = path_saves ,defaultextension = '.bird', filetypes=[('text files', 'bird')])
         with open(answer, 'wb') as fp:  #save current selections to named file
             pickle.dump(self.game_list, fp)
             pickle.dump(self.game_defaults, fp)
@@ -722,18 +738,13 @@ class ConfigPage(ttk.Frame):
     def save_file_most_missed(self, controller):
         most_common = collections.Counter(recent_misses).most_common(10)
         my_list2, my_list1 = zip(*most_common)
-        #ConfigPage.activate_game_list(self)
-        #answer = tk.filedialog.asksaveasfilename(initialdir = path_saves ,defaultextension = '.txt', filetypes=[('text files', 'txt')])
-        with open(path_saves+'most_missed.txt', 'wb') as fp:  #save most missed to file
+        with open(path_saves+'most_missed.bird', 'wb') as fp:  #save most missed to file
             pickle.dump(my_list2, fp)
             pickle.dump(self.game_defaults, fp)
 
 class HelpPage(ttk.Frame):
     def menubar(self, root):        ##menubar
         menubar = tk.Menu(root)
-        #pageMenu = tk.Menu(menubar)
-        #pageMenu.add_command(label="PageOne")
-        #menubar.add_cascade(label="PageOne", menu=pageMenu)
         return menubar 
     def __init__(self, parent, controller):
         self.controller = controller
@@ -883,7 +894,7 @@ Advanced: All versions of songs and calls will be available during gameplay.
         self.text_bird_entry.insert('end',quote_bird_entry)
         try:
             self.text_bird_entry.insert('end',"\nVocalizations: "+species_info[9])
-        except IndexError:
+        except:
             pass
         self.text_bird_entry.tag_add('underline', '1.0', '1.end')
         self.text_bird_entry.tag_config('underline',justify='center',underline = True ,font='helvetica 14 bold', relief='raised')
